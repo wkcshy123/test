@@ -3,6 +3,7 @@ clc
 close all
 load WTGx.mat
 load time_lstm_train_test.mat
+
 %Ein Regressionmodell auf Basis der Turbine 3 trainieren, darin sind Daten im Zeitraum 2011-2013
 %Zustand in diesem Zeitraum wird als gesund angenommen und deswegen als Trainingsdatensatz verwendet
 
