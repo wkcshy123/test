@@ -1,7 +1,11 @@
+# -*- coding: utf-8 -*-
+import os
 import re
 import pandas as pd
 import requests
 from sqlalchemy import create_engine
+import random
+import datetime
 
 
 class AvgleSearcher:
@@ -48,18 +52,22 @@ class AvgleSearcher:
                      vid               double     null,
                      uid               text       null,
                      search_keyword    text       null,
+                     update_date       date       null, 
                      constraint uni
                         unique (vid))"""
             conn.execute(sql)
 
     def search(self):
         video_list = pd.DataFrame()
+        today = datetime.date.today()
         for word in self.begriff:
             for i in range(self.page_zahl):
-                collection = requests.get('https://api.avgle.com/v1/search/' + word + '/' + str(i)).json()
+                collection = requests.get('https://api.avgle.com/v1/search/' + word + '/' + str(i),
+                                          headers=random_header()).json()
                 if collection['response']['has_more']:
                     response = pd.DataFrame(collection['response']['videos'])
                     response['search_keyword'] = word
+                    response['update_date'] = today
                     video_list = video_list.append(response, ignore_index=True)
                 else:
                     print('page out of range at {}'.format(i), flush=True)
@@ -79,22 +87,73 @@ class AvgleSearcher:
                 pass
         print("{} were found".format(i))
 
+
 class Analyser:
-    def __init__(self, database, password, table):
+    def __init__(self, database, password, table, searchkeywords, filepath):
         self.database = database
         self.table = table
-        self.engine = create_engine('mysql+pymysql://root:' 
-        	+ password + '@127.0.0.1:3306/' + self.database, echo=False)
+        self.search_keywords = searchkeywords
+        self.engine = create_engine('mysql+pymysql://root:'
+                                    + password + '@127.0.0.1:3306/' + self.database, echo=False)
+        self.rootpath = filepath
 
-    def GetData(self):
+    def GetDataFromDatabase(self):
+        conn = self.engine.connect()
+        sql = "USE " + self.database
+        sql2 = "SHOW COLUMNS FROM " + self.table
+        conn.execute(sql)
+        data = pd.DataFrame()
+        for word in self.search_keywords:
+            sql1 = "SELECT * FROM " + self.table + " WHERE search_keyword='" + word + "'"
+            data = data.append(pd.DataFrame(conn.execute(sql1).fetchall()))
+
+        columnsname_row_list = conn.execute(sql2).fetchall()
+        columnsnames = [x[0] for x in columnsname_row_list]
+        data.columns = columnsnames
+        return data
+
+    def downloadPicture(self):
+        data = Analyser.GetDataFromDatabase(self)
+        headers = random_header()
+        generator = (x for x in self.search_keywords)
+        for n in generator:
+            mkdir(self.rootpath + "/" + n)
+        for folder, name, url, update_date in zip(data['search_keyword'], data['title'],
+                                                  data['preview_url'], data['update_date']):
+            filepath1 = self.rootpath + '/' + folder + '/' + name + str(update_date) + '.jpg'
+            with open(filepath1, 'wb') as f:
+                f.write(requests.get(url, headers).content)
+                print('downloaded', flush=True)
 
 
+def random_header():
+    headers_list = [
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) '
+        'Version/11.0 Mobile/15A372 Safari/604.1',
+        'Mozilla/5.0 (MeeGo; NokiaN9) AppleWebKit/534.13 (KHTML, like Gecko) NokiaBrowser/8.5.0 Mobile Safari/534.13',
+    ]
+    return {
+        'cookie': "ua=237aa6249591b6a7ad6962bc73492c77; platform_cookie_reset=pc; platform=pc; "
+                  "bs=kkfbi66h9zevjeq5bt27j0rvno182xdl; ss=205462885846193616; RNLBSERVERID=ded6699",
+        'user-agent': random.choice(headers_list)
+    }
+
+
+def mkdir(path):
+    folder = os.path.exists(path)
+
+    if not folder:  # 判断是否存在文件夹如果不存在则创建为文件夹
+        os.makedirs(path)  # makedirs 创建文件时如果路径不存在会创建这个路径
+        print("---  new folder...  ---")
+        print("---  OK  ---")
+    else:
+        print("---  There is this folder!  ---")
 
 
 if __name__ == '__main__':
     begriff = ['上原亜衣', '有坂深雪', '波多野結衣', '橋本ありな']  # list
-    page_zahl = 999  # int
-    database = 'wkcshy2'  # str
+    page_zahl = 1  # int
+    database = 'wkcshy1'  # str
     table = 'av'  # str
     password = '1234'  # str
     searcher = AvgleSearcher(begriff, page_zahl, database, password, table)
@@ -102,9 +161,8 @@ if __name__ == '__main__':
     searcher.tableEstablish()
     searcher.upload_in_mysql()
     print('fertig!')
+    
+    filepath = '/Users/zf/Downloads/av'
+    analyser = Analyser(database, password, table, begriff, filepath)
 
-
-
-
-
-
+    analyser.downloadPicture()
