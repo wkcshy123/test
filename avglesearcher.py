@@ -17,7 +17,11 @@ class AvgleSearcher:
         self.page_zahl = page_zahl
 
     def databaseEstablish(self):
-        conn = self.engine.connect()
+        try:
+            conn = self.engine.connect()
+        except Exception as e:
+            print('password false!')
+
         databasenames = str(conn.execute("show databases").fetchall())
         p1 = re.compile(r'[(][\'](.*?)[\'][,)]', re.S)  # 最小匹配
         databaseList = re.findall(p1, databasenames)
@@ -28,7 +32,11 @@ class AvgleSearcher:
             conn.execute(sql1)
 
     def tableEstablish(self):
-        conn = self.engine.connect()
+        try:
+            conn = self.engine.connect()
+        except Exception as e:
+            print('password false!')
+
         conn.execute("USE " + self.database)
 
         tablelist = conn.execute("show tables").fetchall()
@@ -83,7 +91,7 @@ class AvgleSearcher:
                            schema=self.database, index=False, if_exists='append')
                 print('success!', flush=True)
             except Exception as e:
-                print('already exist', flush=True)
+                print('data already exist', flush=True)
                 pass
         print("{} were found".format(i))
 
@@ -120,10 +128,14 @@ class Analyser:
             mkdir(self.rootpath + "/" + n)
         for folder, name, url, update_date in zip(data['search_keyword'], data['title'],
                                                   data['preview_url'], data['update_date']):
-            filepath1 = self.rootpath + '/' + folder + '/' + name + str(update_date) + '.jpg'
-            with open(filepath1, 'wb') as f:
-                f.write(requests.get(url, headers).content)
-                print('downloaded', flush=True)
+            name = eval(repr(name).replace('/', '!'))
+            filepath1 = self.rootpath + '/' + folder + '/' + name + '---' + str(update_date) + '.jpg'
+            if not os.path.exists(filepath1):
+                with open(filepath1, 'wb') as f:
+                    f.write(requests.get(url, headers).content)
+                    print('downloaded', flush=True)
+            else:
+                print('picture already exist', flush=True)
 
 
 def random_header():
@@ -153,7 +165,7 @@ def mkdir(path):
 if __name__ == '__main__':
     begriff = ['上原亜衣', '有坂深雪', '波多野結衣', '橋本ありな']  # list
     page_zahl = 1  # int
-    database = 'wkcshy1'  # str
+    database = 'wkcshy3'  # str
     table = 'av'  # str
     password = '1234'  # str
     searcher = AvgleSearcher(begriff, page_zahl, database, password, table)
